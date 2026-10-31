@@ -14,10 +14,15 @@ jobs:
       - env:
           BODY: ${{ github.event.issue.body }}
           N: ${{ github.event.issue.number }}
+          AUTHOR: ${{ github.event.issue.user.login }}
+          CREATED: ${{ github.event.issue.created_at }}
         run: |
-          mkdir -p "Mission Info"
+          mkdir -p "Mission Info/Missions"
+          F="Mission Info/Missions/${CREATED%%T*}_${AUTHOR}.txt"
+          # same author, same day: add the issue number so nothing is overwritten
+          [ -e "$F" ] && F="Mission Info/Missions/${CREATED%%T*}_${AUTHOR}_$N.txt"
           # drop the "@owner" line and the blank line after it, strip CRs
-          printf '%s\n' "$BODY" | tr -d '\r' | tail -n +3 > "Mission Info/mission-$N.txt"
+          printf '%s\n' "$BODY" | tr -d '\r' | tail -n +3 > "$F"
           git config user.name github-actions
           git config user.email github-actions@users.noreply.github.com
           git add "Mission Info"
