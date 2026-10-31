@@ -1,0 +1,33 @@
+name: Save mission
+on:
+  issues:
+    types: [opened]
+permissions:
+  contents: write
+jobs:
+  save:
+    # Only owner/collaborators can write files; strangers' issues are ignored.
+    if: startsWith(github.event.issue.title, '[Mission]') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          BODY: ${{ github.event.issue.body }}
+          N: ${{ github.event.issue.number }}
+          TITLE: ${{ github.event.issue.title }}
+          CREATED: ${{ github.event.issue.created_at }}
+        run: |
+          mkdir -p "Mission Info/Missions"
+          # Mission Maker is the issue title after "[Mission] "; free text, so reduce it to filename-safe characters
+          MAKER=$(printf '%s' "${TITLE#\[Mission\] }" | tr -c 'A-Za-z0-9._-' '_' | cut -c1-50)
+          [ -n "$MAKER" ] || MAKER=unknown
+          F="Mission Info/Missions/${CREATED%%T*}_${MAKER}.txt"
+          # same maker, same day: add the issue number so nothing is overwritten
+          [ -e "$F" ] && F="Mission Info/Missions/${CREATED%%T*}_${MAKER}_$N.txt"
+          # drop the "@owner" line and the blank line after it, strip CRs
+          printf '%s\n' "$BODY" | tr -d '\r' | tail -n +3 > "$F"
+          git config user.name github-actions
+          git config user.email github-actions@users.noreply.github.com
+          git add "Mission Info"
+          git commit -m "Add mission $N"
+          git push
