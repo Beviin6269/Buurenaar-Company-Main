@@ -12,7 +12,10 @@ input,textarea,select{width:100%;box-sizing:border-box;font:inherit}
 .yn input{width:auto}
 h2{margin:2rem 0 .2rem;border-bottom:1px solid #888}
 .sub{margin:0 0 .5rem;color:#666}
-pre{white-space:pre-wrap;background:#eee;color:#111;padding:1rem}
+#out{background:#eee;color:#111;padding:1rem}
+#out p{margin:.3rem 0}
+#out h2{margin:1rem 0 .2rem}
+#out h3{margin:.8rem 0 .2rem;font-size:1.1rem}
 </style>
 <div id="pg1">
   <h1>Mission Brief Form</h1>
@@ -20,9 +23,12 @@ pre{white-space:pre-wrap;background:#eee;color:#111;padding:1rem}
 </div>
 <section id="res" hidden>
   <h1>Mission Brief</h1>
-  <pre id="out"></pre>
-  <p><a id="a" target="_blank" rel="noopener">Open the issue</a> and click "Submit new issue" to file it.</p>
-  <button id="back">Back to form</button>
+  <div id="out"></div>
+  <p>
+    <button id="copy">Copy Text</button>
+    <button id="save">Save in GitHub (requires account)</button>
+    <button id="back">Back to form</button>
+  </p>
 </section>
 <script>
 // EDIT HERE. Section: [header, subheader html, fields].
@@ -110,7 +116,7 @@ const sync = k => {
 const f = document.getElementById("f");
 f.innerHTML = SECTIONS.map(([h, s, fs]) =>
   (h ? `<h2>${h}</h2>` : "") + (s ? `<p class="sub">${s}</p>` : "") + fs.map(field).join("")).join("")
-  + `<button>Submit</button>`;
+  + `<button>View as text</button>`;
 
 // A disabled box is skipped by validation and by FormData, so ticking "No"/"None" also drops its required-ness.
 const off = () => f.querySelectorAll("[data-off]").forEach(c => f.elements[c.dataset.off].disabled = c.checked);
@@ -125,16 +131,34 @@ f.onchange = ({ target: t }) => {
   }
 };
 
+// Preview page: renders the briefing's Markdown (## / ### headers, * bullets) with textContent, so typed text can't inject HTML.
+const render = text => {
+  out.replaceChildren();
+  let ul;
+  for (const line of text.split("\n")) {
+    const h = /^(#{2,3}) (.*)/.exec(line), li = /^\* (.*)/.exec(line);
+    const el = document.createElement(h ? "h" + h[1].length : li ? "li" : "p");
+    el.textContent = h ? h[2] : li ? li[1] : line;
+    if (li) (ul ||= out.appendChild(document.createElement("ul"))).append(el);
+    else { ul = null; out.append(el); }
+  }
+};
+
+let text, url;
 f.onsubmit = e => {
   e.preventDefault();
   const v = Object.fromEntries(new FormData(f));
-  const text = fmt(v);
-  const url = `https://github.com/${owner}/${repo}/issues/new?title=${encodeURIComponent("[Mission] " + v.maker)}&body=${encodeURIComponent(`@${owner}\n\n${text}`)}`;
-  out.textContent = text;
-  a.href = url;
+  text = fmt(v);
+  url = `https://github.com/${owner}/${repo}/issues/new?title=${encodeURIComponent("[Mission] " + v.maker)}&body=${encodeURIComponent(`@${owner}\n\n${text}`)}`;
+  render(text);
   pg1.hidden = true; res.hidden = false;
   scrollTo(0, 0);
-  window.open(url, "_blank");
+};
+save.onclick = () => window.open(url, "_blank");
+copy.onclick = async () => {
+  try { await navigator.clipboard.writeText(text); copy.textContent = "Copied!"; }
+  catch { copy.textContent = "Copy failed"; }
+  setTimeout(() => copy.textContent = "Copy Text", 1500);
 };
 back.onclick = () => { res.hidden = true; pg1.hidden = false; };
 </script>
