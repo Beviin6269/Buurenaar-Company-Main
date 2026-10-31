@@ -1,0 +1,17 @@
+## ORIENTATION:
+None provided.
+## SITUATION
+### Enemy:
+Test size enemy force, equipped to a peer level. None
+They do possess night vision equipment.
+They do not possess communication equipment.
+They are known to use This, that.
+No aircraft have been detected in the airspace.
+They possess surface-to-air missile installations.
+### Friendly/Independent:
+* No non-hostile forces in the AO.
+* Artillery fire 
+### Civilian:
+No known civilian presence in AO.
+## DESIRED END STATE:
+Killed dude
