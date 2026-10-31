@@ -1,0 +1,140 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mission Brief Form</title>
+<style>
+body{font:16px system-ui;max-width:40rem;margin:2rem auto;padding:0 1rem}
+label{display:block;margin:.6rem 0}
+input,textarea,select{width:100%;box-sizing:border-box;font:inherit}
+.pre input{width:10rem}
+.yn{margin:.6rem 0}
+.yn label{display:inline;margin:0 0 0 .8rem}
+.yn input{width:auto}
+h2{margin:2rem 0 .2rem;border-bottom:1px solid #888}
+.sub{margin:0 0 .5rem;color:#666}
+pre{white-space:pre-wrap;background:#eee;color:#111;padding:1rem}
+</style>
+<div id="pg1">
+  <h1>Mission Brief Form</h1>
+  <form id="f"></form>
+</div>
+<section id="res" hidden>
+  <h1>Mission Brief</h1>
+  <pre id="out"></pre>
+  <p><a id="a" target="_blank" rel="noopener">Open the issue</a> and click "Submit new issue" to file it.</p>
+  <button id="back">Back to form</button>
+</section>
+<script>
+// EDIT HERE. Section: [header, subheader html, fields].
+// Field: [key, label, type, optional?, toggle?].
+// type: text | date | textarea | yesno | pre (text box before the label, same line) | [select options].
+// toggle (text/textarea only): "yesno" = Yes/No pair, "No" disables the box; any other string = one checkbox with that label, ticked disables the box.
+const SECTIONS = [
+  [null, "", [
+    ["maker", "Mission Maker", "text"],
+    ["date", "Mission Date (if known)", "date", 1],
+    ["urgent", "Time-sensitive task?", "yesno"],
+  ]],
+  ["Enemy Info", "", [
+    ["size", "size enemy force", "pre"],
+    ["equip", "Equipment level", ["peer", "near-peer", "rudimentary"]],
+    ["desc", "Brief description of enemy", "textarea"],
+    ["nvg", "NVG capable?", "yesno"],
+    ["comm", "Comm capable?", "yesno"],
+    ["veh", "Vehicles in AO", "text", 0, "No Vehicles"],
+    ["air", "Aircraft in AO", "text", 0, "No Aircraft"],
+    ["aa", "AA capable?", ["No anti-air equipment", "man-portable anti-air defense systems", "surface-to-air missile installations"]],
+  ]],
+  ["Other Players", "", [
+    ["friend", "Non-hostile forces in AO", "textarea", 0, "None"],
+    ["third", "Third-party support available", "textarea", 1, "yesno"],
+    ["civ", "Locations that contain civilians in AO", "textarea", 0, "No Civilians in AO"],
+  ]],
+  ["Desired End State", "This is the situation we have been hired to bring about.<br>Example: <code>VIP is returned safely to NATO forces</code><br>Example: <code>enemy AA facility no longer poses a threat</code>", [
+    ["end", "End State", "textarea"],
+  ]],
+  ["Supporting Information", "Provide any useful information not listed above.", [
+    ["other", "Other Info", "textarea", 1],
+  ]],
+];
+
+// EDIT HERE: the briefing format. Output is Markdown (the issue body renders it).
+// Maker, date and urgency are not in the briefing format, so they are not output.
+const fmt = v => [
+  "## ORIENTATION:",
+  v.other || "None provided.",
+  "## SITUATION",
+  "### Enemy:",
+  `${v.size} size enemy force, equipped to a ${v.equip} level. ${v.desc}`,
+  `They ${v.nvg === "yes" ? "do" : "do not"} possess night vision equipment.`,
+  `They ${v.comm === "yes" ? "do" : "do not"} possess communication equipment.`,
+  `They are known to use ${v.veh_off ? "no vehicles" : v.veh}.`,
+  `${v.air_off ? "No aircraft" : v.air} have been detected in the airspace.`,
+  `They possess ${v.aa[0].toLowerCase() + v.aa.slice(1)}.`,
+  "### Friendly/Independent:",
+  `* ${v.friend_off ? "No non-hostile forces in the AO." : v.friend}`,
+  `* ${v.third_yn === "no" ? "No third-party support available." : v.third || "Third-party support is available (no details given)."}`,
+  "### Civilian:",
+  v.civ_off ? "No known civilian presence in AO." : v.civ,
+  "## DESIRED END STATE:",
+  v.end,
+].join("\n");
+
+// shortcut: repo derived from github.io URL, breaks on custom domains; hardcode owner/repo then.
+const owner = location.hostname.split(".")[0];
+const repo = location.pathname.split("/")[1] || `${owner}.github.io`;
+
+// off = key of the box that the "No" checkbox disables.
+const yn = (k, off) => ["Yes", "No"].map(o => `<label>${o} <input type="checkbox" name="${k}" value="${o.toLowerCase()}"${off && o === "No" ? ` data-off="${off}"` : ""}></label>`).join("");
+
+const field = ([k, l, t, opt, tog]) => {
+  const r = opt ? "" : "required";
+  if (t === "pre") return `<label class="pre"><input name="${k}" type="text" ${r}> ${l}</label>`;
+  l += l.endsWith("?") ? "" : ":";
+  if (t === "yesno") return `<div class="yn">${l}${yn(k)}</div>`;
+  const el = Array.isArray(t)
+    ? `<select name="${k}" ${r}><option value="">--</option>${t.map(o => `<option>${o}</option>`).join("")}</select>`
+    : t === "textarea" ? `<textarea name="${k}" aria-label="${l}" rows="3" ${r}></textarea>`
+    : `<input name="${k}" aria-label="${l}" type="${t}" ${r}>`;
+  if (!tog) return `<label>${l}${el}</label>`;
+  return `<div class="yn">${l}${tog === "yesno" ? yn(k + "_yn", k) : `<label>${tog} <input type="checkbox" name="${k}_off" data-off="${k}"></label>`}</div>${el}`;
+};
+
+// Yes/No checkboxes: mutually exclusive, and one must be ticked (checkboxes have no native required-group).
+const sync = k => {
+  const [y, n] = f.querySelectorAll(`[name=${k}]`);
+  if (!n) return; // single checkbox, nothing to require
+  y.setCustomValidity(y.checked || n.checked ? "" : "Select Yes or No");
+};
+
+const f = document.getElementById("f");
+f.innerHTML = SECTIONS.map(([h, s, fs]) =>
+  (h ? `<h2>${h}</h2>` : "") + (s ? `<p class="sub">${s}</p>` : "") + fs.map(field).join("")).join("")
+  + `<button>Submit</button>`;
+
+// A disabled box is skipped by validation and by FormData, so ticking "No"/"None" also drops its required-ness.
+const off = () => f.querySelectorAll("[data-off]").forEach(c => f.elements[c.dataset.off].disabled = c.checked);
+
+f.querySelectorAll(".yn input:first-child").forEach(c => sync(c.name));
+off();
+f.onchange = ({ target: t }) => {
+  if (t.type === "checkbox") {
+    if (t.checked) f.querySelectorAll(`[name=${t.name}]`).forEach(c => c.checked = c === t);
+    sync(t.name);
+    off();
+  }
+};
+
+f.onsubmit = e => {
+  e.preventDefault();
+  const v = Object.fromEntries(new FormData(f));
+  const text = fmt(v);
+  const url = `https://github.com/${owner}/${repo}/issues/new?title=${encodeURIComponent("[Mission] " + v.maker)}&body=${encodeURIComponent(`@${owner}\n\n${text}`)}`;
+  out.textContent = text;
+  a.href = url;
+  pg1.hidden = true; res.hidden = false;
+  scrollTo(0, 0);
+  window.open(url, "_blank");
+};
+back.onclick = () => { res.hidden = true; pg1.hidden = false; };
+</script>
